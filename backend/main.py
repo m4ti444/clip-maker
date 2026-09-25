@@ -9,24 +9,50 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+import sys
+# Asegurar que tanto la raíz del proyecto como backend estén en sys.path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+for p in [current_dir, parent_dir]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
-from backend.config import settings
-from backend.middleware import get_user_credentials, validate_credentials
-from backend.database.db import init_db, get_db, Clip, Campaign
-from backend.models.schemas import (
-    VideoProcessRequest, ProcessingStatus, ClipResult, 
-    CampaignCreate, CampaignUpdate, CampaignResponse
-)
-from backend.security import (
-    RateLimiter, InputSanitizer, SecurityHeadersMiddleware,
-    CredentialEncryption, AuditLogger, RequestValidator
-)
-from backend.services.downloader import download_video
-from backend.services.transcriber import transcriber_service
-from backend.services.clip_selector import clip_selector_service
-from backend.services.video_processor import cut_clip, add_subtitles, reframe_vertical
-from backend.services.campaign_manager import campaign_manager_service
-from backend.services.face_tracker import face_tracker_service
+try:
+    from backend.config import settings
+    from backend.middleware import get_user_credentials, validate_credentials
+    from backend.database.db import init_db, get_db, Clip, Campaign
+    from backend.models.schemas import (
+        VideoProcessRequest, ProcessingStatus, ClipResult, 
+        CampaignCreate, CampaignUpdate, CampaignResponse
+    )
+    from backend.security import (
+        RateLimiter, InputSanitizer, SecurityHeadersMiddleware,
+        CredentialEncryption, AuditLogger, RequestValidator
+    )
+    from backend.services.downloader import download_video
+    from backend.services.transcriber import transcriber_service
+    from backend.services.clip_selector import clip_selector_service
+    from backend.services.video_processor import cut_clip, add_subtitles, reframe_vertical
+    from backend.services.campaign_manager import campaign_manager_service
+    from backend.services.face_tracker import face_tracker_service
+except ImportError:
+    from config import settings
+    from middleware import get_user_credentials, validate_credentials
+    from database.db import init_db, get_db, Clip, Campaign
+    from models.schemas import (
+        VideoProcessRequest, ProcessingStatus, ClipResult, 
+        CampaignCreate, CampaignUpdate, CampaignResponse
+    )
+    from security import (
+        RateLimiter, InputSanitizer, SecurityHeadersMiddleware,
+        CredentialEncryption, AuditLogger, RequestValidator
+    )
+    from services.downloader import download_video
+    from services.transcriber import transcriber_service
+    from services.clip_selector import clip_selector_service
+    from services.video_processor import cut_clip, add_subtitles, reframe_vertical
+    from services.campaign_manager import campaign_manager_service
+    from services.face_tracker import face_tracker_service
 
 app = FastAPI(title="ClipEngine API")
 
