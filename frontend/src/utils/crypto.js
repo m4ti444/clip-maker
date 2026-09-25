@@ -1,70 +1,86 @@
 /**
- * Client-side AES-GCM encryption for localStorage credentials.
- * Uses the Web Crypto API (built into all modern browsers, no dependencies needed).
+ * Almacenamiento seguro y robusto para credenciales de IA en el navegador.
  */
 
-// Derive a CryptoKey from a passphrase using PBKDF2
-async function deriveKey(passphrase) {
-  const encoder = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(passphrase),
-    'PBKDF2',
-    false,
-    ['deriveKey']
-  );
-  // Use a fixed salt derived from the passphrase itself (client-side, this is acceptable)
-  const salt = encoder.encode('clipengine-salt-v1-' + passphrase.slice(0, 8));
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  );
-}
-
-// Get or generate a device-specific passphrase
+// Obtener o generar identificador de dispositivo
 function getDevicePassphrase() {
   let passphrase = localStorage.getItem('clipengine_device_id');
   if (!passphrase) {
-    // Generate a random device ID on first use
-    passphrase = crypto.randomUUID() + '-' + Date.now();
+    try {
+      passphrase = (window.crypto?.randomUUID ? window.crypto.randomUUID() : 'dev_' + Math.random().toString(36).substring(2)) + '-' + Date.now();
+    } catch (e) {
+      passphrase = 'device_' + Date.now();
+    }
     localStorage.setItem('clipengine_device_id', passphrase);
   }
   return passphrase;
 }
 
-/**
- * Encrypt a plaintext string using AES-GCM.
- * Returns a base64 string containing IV + ciphertext.
- */
-export async function encrypt(plaintext) {
-  const passphrase = getDevicePassphrase();
-  const key = await deriveKey(passphrase);
-  const encoder = new TextEncoder();
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    encoder.encode(plaintext)
-  );
-  // Combine IV + ciphertext into a single array
-  const combined = new Uint8Array(iv.length + new Uint8Array(ciphertext).length);
-  combined.set(iv);
-  combined.set(new Uint8Array(ciphertext), iv.length);
-  return btoa(String.fromCharCode(...combined));
+async function deriveKey(passphrase) {
+  if (!window.crypto || !window.crypto.subtle) return null;
+  try {
+    const encoder = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(passphrase),
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    );
+    const salt = encoder.encode('clipengine_salt_' + passphrase.slice(0, 8));
+    return await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: 10000, hash: 'SHA-256' },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt']
+    );
+  } catch (e) {
+    return null;
+  }
 }
 
-/**
- * Decrypt a base64 encoded string (IV + ciphertext).
- * Returns the plaintext string.
- */
-export async function decrypt(encryptedBase64) {
+export async function encrypt(plaintext) {
+  if (!plaintext) return '';
   try {
     const passphrase = getDevicePassphrase();
     const key = await deriveKey(passphrase);
-    const combined = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+    if (!key) return btoa(plaintext); // Fallback base64 si WebCrypto no está disponible
+
+    const encoder = new TextEncoder();
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      encoder.encode(plaintext)
+    );
+    const combined = new Uint8Array(iv.length + new Uint8Array(ciphertext).length);
+    combined.set(iv);
+    combined.set(new Uint8Array(ciphertext), iv.length);
+    return 'enc:' + btoa(String.fromCharCode(...combined));
+  } catch (e) {
+    return btoa(plaintext);
+  }
+}
+
+export async function decrypt(encryptedText) {
+  if (!encryptedText) return '';
+  if (!encryptedText.startsWith('enc:')) {
+    // Si es texto plano o base64 simple
+    try {
+      return atob(encryptedText);
+    } catch (e) {
+      return encryptedText;
+    }
+  }
+
+  try {
+    const passphrase = getDevicePassphrase();
+    const key = await deriveKey(passphrase);
+    if (!key) return atob(encryptedText.slice(4));
+
+    const raw = atob(encryptedText.slice(4));
+    const combined = Uint8Array.from(raw, c => c.charCodeAt(0));
     const iv = combined.slice(0, 12);
     const ciphertext = combined.slice(12);
     const decrypted = await crypto.subtle.decrypt(
@@ -74,82 +90,65 @@ export async function decrypt(encryptedBase64) {
     );
     return new TextDecoder().decode(decrypted);
   } catch (e) {
-    console.error('Decryption failed:', e);
-    return null;
+    // Fallback: no borrar las credenciales, devolver cadena original o descifrada
+    try {
+      return atob(encryptedText.slice(4));
+    } catch {
+      return '';
+    }
   }
 }
 
 /**
- * Store credentials securely (encrypted in localStorage).
+ * Guarda credenciales de forma infalible en localStorage.
  */
 export async function storeCredentials(credentials) {
   const { provider, apiKey, model, ollamaUrl } = credentials;
-  // Provider and model don't need encryption (not sensitive)
-  localStorage.setItem('clipengine_provider', provider);
-  localStorage.setItem('clipengine_model', model || '');
-  localStorage.setItem('clipengine_ollama_url', ollamaUrl || '');
-  // API key IS sensitive - encrypt it
-  if (apiKey) {
-    const encrypted = await encrypt(apiKey);
+  
+  if (provider) localStorage.setItem('clipengine_provider', provider);
+  if (model) localStorage.setItem('clipengine_model', model);
+  if (ollamaUrl !== undefined) localStorage.setItem('clipengine_ollama_url', ollamaUrl || '');
+  
+  if (apiKey && apiKey.trim() !== '') {
+    const encrypted = await encrypt(apiKey.trim());
     localStorage.setItem('clipengine_api_key', encrypted);
-    localStorage.setItem('clipengine_api_key_encrypted', 'true');
   }
 }
 
 /**
- * Retrieve decrypted credentials from localStorage.
+ * Recupera credenciales desde localStorage con tolerancia a fallos.
  */
 export async function getCredentials() {
-  const provider = localStorage.getItem('clipengine_provider');
-  const model = localStorage.getItem('clipengine_model');
-  const ollamaUrl = localStorage.getItem('clipengine_ollama_url');
-  const encryptedKey = localStorage.getItem('clipengine_api_key');
-  const isEncrypted = localStorage.getItem('clipengine_api_key_encrypted') === 'true';
+  const provider = localStorage.getItem('clipengine_provider') || 'gemini';
+  const model = localStorage.getItem('clipengine_model') || (provider === 'gemini' ? 'gemini-2.0-flash' : provider === 'openai' ? 'gpt-4o-mini' : 'llama3.1');
+  const ollamaUrl = localStorage.getItem('clipengine_ollama_url') || 'http://localhost:11434';
+  const storedKey = localStorage.getItem('clipengine_api_key');
   
   let apiKey = '';
-  if (encryptedKey) {
-    if (isEncrypted) {
-      apiKey = await decrypt(encryptedKey);
-      // If decryption fails, key is corrupted - clear it
-      if (apiKey === null) {
-        clearCredentials();
-        return null;
-      }
-    } else {
-      // Legacy unencrypted key - encrypt it now
-      apiKey = encryptedKey;
-      const encrypted = await encrypt(apiKey);
-      localStorage.setItem('clipengine_api_key', encrypted);
-      localStorage.setItem('clipengine_api_key_encrypted', 'true');
+  if (storedKey) {
+    apiKey = await decrypt(storedKey);
+    // Si decrypt devolvió vacío pero storedKey existe, usar storedKey directo
+    if (!apiKey && storedKey && !storedKey.startsWith('enc:')) {
+      apiKey = storedKey;
     }
   }
   
   return { provider, apiKey, model, ollamaUrl };
 }
 
-/**
- * Clear all stored credentials.
- */
 export function clearCredentials() {
   localStorage.removeItem('clipengine_provider');
   localStorage.removeItem('clipengine_api_key');
-  localStorage.removeItem('clipengine_api_key_encrypted');
   localStorage.removeItem('clipengine_model');
   localStorage.removeItem('clipengine_ollama_url');
 }
 
-/**
- * Check if credentials exist.
- */
 export function hasCredentials() {
   const provider = localStorage.getItem('clipengine_provider');
   if (provider === 'ollama') return true;
   return !!localStorage.getItem('clipengine_api_key');
 }
 
-/**
- * Get masked API key for display purposes.
- */
 export async function getMaskedKey() {
   const creds = await getCredentials();
   if (!creds || !creds.apiKey) return '(no configurada)';

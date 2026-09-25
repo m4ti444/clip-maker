@@ -3,3 +3,4 @@
 [2026-09-25 19:53:31,847] [INFO] [127.0.0.1] [PROCESS_VIDEO] 
 [2026-09-25 20:03:42,803] [INFO] [127.0.0.1] [AUTH] Provider: gemini, Status: FAILED, Reason: 
 [2026-09-25 20:05:54,994] [INFO] [127.0.0.1] [FILE_DELETE] Path: ./output\9dd82aff-8e02-41f1-80a4-77091a22a5d5_0.mp4
+[2026-09-25 20:11:56,135] [INFO] [127.0.0.1] [AUTH] Provider: gemini, Status: FAILED, Reason: 

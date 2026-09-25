@@ -26,6 +26,13 @@ export default function Home() {
   useEffect(() => {
     fetchClips();
     fetchDefaultSettings();
+
+    // Restaurar proceso si el usuario navegó a otra página
+    const activeJob = localStorage.getItem('clipengine_active_job_id');
+    if (activeJob) {
+      setActiveJobId(activeJob);
+      setIsProcessing(true);
+    }
   }, []);
 
   const fetchDefaultSettings = async () => {
@@ -83,6 +90,7 @@ export default function Home() {
       
       const jobId = response.data?.job_id || response.data?.jobId;
       if (jobId) {
+        localStorage.setItem('clipengine_active_job_id', jobId);
         setActiveJobId(jobId);
         toast.success('Procesamiento iniciado');
       } else {
@@ -97,11 +105,14 @@ export default function Home() {
   };
 
   const handleProcessError = (errMsg) => {
+    localStorage.removeItem('clipengine_active_job_id');
     setIsProcessing(false);
+    setActiveJobId(null);
     toast.error(errMsg || 'Error durante la generación de clips');
   };
 
   const handleProcessComplete = (newClips) => {
+    localStorage.removeItem('clipengine_active_job_id');
     setIsProcessing(false);
     setActiveJobId(null);
     if (newClips && newClips.length > 0) {

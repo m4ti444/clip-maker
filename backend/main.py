@@ -438,17 +438,41 @@ async def get_campaign_clips(id: int, db: AsyncSession = Depends(get_db)):
 
 @app.get("/api/settings")
 async def get_settings():
-    return settings.model_dump()
+    return {
+        "whisper_model": settings.WHISPER_MODEL,
+        "whisperModel": settings.WHISPER_MODEL,
+        "default_clip_min_duration": settings.DEFAULT_CLIP_MIN_DURATION,
+        "defaultMinDuration": settings.DEFAULT_CLIP_MIN_DURATION,
+        "default_clip_max_duration": settings.DEFAULT_CLIP_MAX_DURATION,
+        "defaultMaxDuration": settings.DEFAULT_CLIP_MAX_DURATION,
+        "default_clip_count": settings.DEFAULT_CLIP_COUNT,
+        "defaultClipCount": settings.DEFAULT_CLIP_COUNT,
+        "temp_file_ttl_hours": settings.TEMP_FILE_TTL_HOURS,
+    }
 
 @app.put("/api/settings")
 async def update_settings(updates: dict):
-    # Only in-memory for this simple demo
+    key_mapping = {
+        "whisper_model": "WHISPER_MODEL",
+        "whisperModel": "WHISPER_MODEL",
+        "default_clip_min_duration": "DEFAULT_CLIP_MIN_DURATION",
+        "defaultMinDuration": "DEFAULT_CLIP_MIN_DURATION",
+        "default_clip_max_duration": "DEFAULT_CLIP_MAX_DURATION",
+        "defaultMaxDuration": "DEFAULT_CLIP_MAX_DURATION",
+        "default_clip_count": "DEFAULT_CLIP_COUNT",
+        "defaultClipCount": "DEFAULT_CLIP_COUNT",
+    }
     for k, v in updates.items():
-        if k in ["LLM_API_KEY", "LLM_PROVIDER", "LLM_MODEL", "OLLAMA_URL"]:
-            continue
-        if hasattr(settings, k):
-            setattr(settings, k, v)
-    return settings.model_dump()
+        attr = key_mapping.get(k, k.upper())
+        if hasattr(settings, attr):
+            try:
+                curr = getattr(settings, attr)
+                if isinstance(curr, int):
+                    v = int(v)
+                setattr(settings, attr, v)
+            except Exception as e:
+                print(f"[AVISO] Error actualizando setting {attr}: {e}")
+    return await get_settings()
 
 class ValidateAuthRequest(BaseModel):
     provider: str

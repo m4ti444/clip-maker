@@ -19,7 +19,8 @@ export default function ProgressBar({ jobId, onComplete, onError }) {
     if (!jobId) return;
 
     let isMounted = true;
-    const interval = setInterval(async () => {
+
+    const pollStatus = async () => {
       try {
         const res = await getStatus(jobId);
         if (!isMounted) return;
@@ -31,12 +32,14 @@ export default function ProgressBar({ jobId, onComplete, onError }) {
         }
 
         if (data.status === 'done' || data.status === 'completed') {
-          clearInterval(interval);
+          if (interval) clearInterval(interval);
+          localStorage.removeItem('clipengine_active_job_id');
           if (onComplete) {
             onComplete(data.clips || []);
           }
         } else if (data.status === 'error') {
-          clearInterval(interval);
+          if (interval) clearInterval(interval);
+          localStorage.removeItem('clipengine_active_job_id');
           setErrorMsg(data.message || 'Ocurrió un error en el procesamiento');
           if (onError) {
             onError(data.message);
@@ -45,7 +48,11 @@ export default function ProgressBar({ jobId, onComplete, onError }) {
       } catch (err) {
         console.error('Error al consultar estado:', err);
       }
-    }, 1500);
+    };
+
+    // Consulta inmediata al cargar
+    pollStatus();
+    const interval = setInterval(pollStatus, 1500);
 
     return () => {
       isMounted = false;
