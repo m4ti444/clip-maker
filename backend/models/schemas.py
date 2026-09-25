@@ -28,7 +28,8 @@ class ProcessingStatus(BaseModel):
     status: str
     progress: float
     message: str
-    clips: List[ClipResult]
+    step: Optional[str] = "download"
+    clips: List[ClipResult] = []
 
 class CampaignCreate(BaseModel):
     name: str

@@ -123,19 +123,32 @@ async def startup_event():
 
 async def process_video_task(job_id: str, request: VideoProcessRequest, file_path: str = None, credentials: dict = None):
     try:
-        jobs[job_id] = {"status": "processing", "progress": 10, "message": "Starting", "clips": []}
+        jobs[job_id] = {
+            "status": "processing", 
+            "step": "download",
+            "progress": 5, 
+            "message": "Preparando entorno...", 
+            "clips": []
+        }
         
         if request.url:
-            jobs[job_id]["message"] = "Downloading video"
+            jobs[job_id]["step"] = "download"
+            jobs[job_id]["progress"] = 15
+            jobs[job_id]["message"] = "Descargando video desde la URL..."
+            print(f"[{job_id[:8]}] Descargando: {request.url}")
             info = await download_video(request.url, settings.UPLOAD_DIR)
             file_path = info['filepath']
         
-        jobs[job_id]["progress"] = 30
-        jobs[job_id]["message"] = "Transcribing video"
+        jobs[job_id]["step"] = "transcribe"
+        jobs[job_id]["progress"] = 35
+        jobs[job_id]["message"] = "Transcribiendo audio con Whisper..."
+        print(f"[{job_id[:8]}] Transcribiendo: {file_path}")
         transcript_data = await transcriber_service.transcribe(file_path)
         
-        jobs[job_id]["progress"] = 50
-        jobs[job_id]["message"] = "Selecting clips"
+        jobs[job_id]["step"] = "analyze"
+        jobs[job_id]["progress"] = 55
+        jobs[job_id]["message"] = "Analizando y seleccionando mejores momentos con IA..."
+        print(f"[{job_id[:8]}] Analizando momentos virales con IA...")
         
         try:
             from backend.database.db import async_session
@@ -154,42 +167,54 @@ async def process_video_task(job_id: str, request: VideoProcessRequest, file_pat
             credentials
         )
         
+        jobs[job_id]["step"] = "cut"
         jobs[job_id]["progress"] = 70
-        jobs[job_id]["message"] = "Generating clips"
+        jobs[job_id]["message"] = f"Generando {len(clips)} clips personalizados..."
+        print(f"[{job_id[:8]}] Generando {len(clips)} clips...")
         
         generated_clips = []
         async with async_session() as db:
+            total_clips = len(clips)
             for idx, clip in enumerate(clips):
+                progress_val = 70 + int(((idx + 1) / max(1, total_clips)) * 25)
+                jobs[job_id]["progress"] = min(95, progress_val)
+                jobs[job_id]["message"] = f"Cortando clip {idx+1} de {total_clips}..."
+                
                 output_name = os.path.join(settings.OUTPUT_DIR, f"{job_id}_{idx}.mp4")
                 
                 await cut_clip(file_path, clip['start_time'], clip['end_time'], output_name)
                 
                 if request.reframe_vertical:
-                    faces = await face_tracker_service.track_faces(output_name)
-                    await reframe_vertical(output_name, faces, output_name)
+                    try:
+                        faces = await face_tracker_service.track_faces(output_name)
+                        await reframe_vertical(output_name, faces, output_name)
+                    except Exception as e:
+                        print(f"[{job_id[:8]}] Reframe error: {e}")
                 
                 if request.add_subtitles:
-                    # Filter transcript segments for this clip
-                    words = []
-                    for seg in transcript_data['segments']:
-                        for w in seg['words']:
-                            if w['start'] >= clip['start_time'] and w['end'] <= clip['end_time']:
-                                w_copy = w.copy()
-                                w_copy['start'] -= clip['start_time']
-                                w_copy['end'] -= clip['start_time']
-                                words.append(w_copy)
-                    if words:
-                        await add_subtitles(output_name, words, output_name, request.subtitle_style)
+                    try:
+                        words = []
+                        for seg in transcript_data.get('segments', []):
+                            for w in seg.get('words', []):
+                                if w['start'] >= clip['start_time'] and w['end'] <= clip['end_time']:
+                                    w_copy = w.copy()
+                                    w_copy['start'] -= clip['start_time']
+                                    w_copy['end'] -= clip['start_time']
+                                    words.append(w_copy)
+                        if words:
+                            await add_subtitles(output_name, words, output_name, request.subtitle_style)
+                    except Exception as e:
+                        print(f"[{job_id[:8]}] Subtitle error: {e}")
 
-                # Save to DB
+                # Guardar en Base de Datos
                 new_clip = Clip(
                     video_source=request.url or "upload",
-                    title=clip.get("title", f"Clip {idx+1}"),
+                    title=clip.get("title", f"Clip #{idx+1}"),
                     start_time=clip['start_time'],
                     end_time=clip['end_time'],
                     duration=clip['end_time'] - clip['start_time'],
                     transcript=clip.get("summary", ""),
-                    virality_score=clip.get("virality_score", 0.0),
+                    virality_score=clip.get("virality_score", 80.0),
                     output_path=output_name,
                     campaign_id=clip.get("campaign_matches", [{}])[0].get("campaign_id") if clip.get("campaign_matches") else None,
                     status="done"
@@ -210,14 +235,19 @@ async def process_video_task(job_id: str, request: VideoProcessRequest, file_pat
                     campaign_id=new_clip.campaign_id
                 ))
             
+        jobs[job_id]["step"] = "export"
         jobs[job_id]["progress"] = 100
         jobs[job_id]["status"] = "done"
-        jobs[job_id]["message"] = "Completed"
+        jobs[job_id]["message"] = "¡Clips generados exitosamente!"
         jobs[job_id]["clips"] = generated_clips
+        print(f"[{job_id[:8]}] Proceso completado exitosamente.")
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         jobs[job_id]["status"] = "error"
-        jobs[job_id]["message"] = str(e)
+        jobs[job_id]["message"] = f"Error: {str(e)}"
+        print(f"[{job_id[:8]}] Error en proceso: {e}")
 
 @app.post("/api/process")
 async def process_video(
@@ -225,33 +255,50 @@ async def process_video(
     background_tasks: BackgroundTasks,
     request: VideoProcessRequest = None,
     file: UploadFile = File(None),
+    min_duration: int = Form(30),
+    max_duration: int = Form(60),
+    clip_count: int = Form(5),
+    add_subtitles: bool = Form(True),
+    reframe_vertical: bool = Form(True),
+    subtitle_style: str = Form("hormozi"),
     credentials: dict = Depends(get_user_credentials)
 ):
     ip = request_obj.client.host if request_obj.client else 'unknown'
     await audit.log_request(request_obj, "PROCESS_VIDEO")
     
-    if request:
-        try:
-            val_data = request_validator.validate_process_request(request.model_dump())
-            request = VideoProcessRequest(**val_data)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
     job_id = str(uuid.uuid4())
     
     if file:
         file_path = os.path.join(settings.UPLOAD_DIR, file.filename)
         with open(file_path, "wb") as f:
             f.write(await file.read())
-        req = VideoProcessRequest() # default
+        req = VideoProcessRequest(
+            min_duration=min_duration,
+            max_duration=max_duration,
+            clip_count=clip_count,
+            add_subtitles=add_subtitles,
+            reframe_vertical=reframe_vertical,
+            subtitle_style=subtitle_style
+        )
         background_tasks.add_task(process_video_task, job_id, req, file_path, credentials)
     elif request and request.url:
+        try:
+            val_data = request_validator.validate_process_request(request.model_dump())
+            request = VideoProcessRequest(**val_data)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         background_tasks.add_task(process_video_task, job_id, request, None, credentials)
     else:
         raise HTTPException(status_code=400, detail="Must provide url or file")
 
-    jobs[job_id] = {"status": "pending", "progress": 0, "message": "Queued", "clips": []}
-    return {"job_id": job_id}
+    jobs[job_id] = {
+        "status": "pending", 
+        "step": "download",
+        "progress": 5, 
+        "message": "En cola...", 
+        "clips": []
+    }
+    return {"job_id": job_id, "jobId": job_id, "status": "pending"}
 
 @app.get("/api/status/{job_id}", response_model=ProcessingStatus)
 async def get_status(job_id: str):

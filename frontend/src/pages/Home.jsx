@@ -43,24 +43,51 @@ export default function Home() {
     try {
       let response;
       if (inputData.type === 'url') {
-        response = await processVideo({ url: inputData.payload, settings });
+        const payload = {
+          url: inputData.payload,
+          min_duration: Number(settings.minDuration) || 30,
+          max_duration: Number(settings.maxDuration) || 60,
+          clip_count: Number(settings.clipCount) || 5,
+          add_subtitles: Boolean(settings.addSubtitles),
+          reframe_vertical: Boolean(settings.reframe),
+          subtitle_style: settings.subtitleStyle || 'hormozi'
+        };
+        response = await processVideo(payload);
       } else {
-        inputData.payload.append('settings', JSON.stringify(settings));
-        response = await processVideo(inputData.payload);
+        const formData = inputData.payload;
+        formData.append('min_duration', Number(settings.minDuration) || 30);
+        formData.append('max_duration', Number(settings.maxDuration) || 60);
+        formData.append('clip_count', Number(settings.clipCount) || 5);
+        formData.append('add_subtitles', Boolean(settings.addSubtitles));
+        formData.append('reframe_vertical', Boolean(settings.reframe));
+        formData.append('subtitle_style', settings.subtitleStyle || 'hormozi');
+        response = await processVideo(formData);
       }
       
-      setActiveJobId(response.data.jobId);
-      toast.success('Procesamiento iniciado');
+      const jobId = response.data?.job_id || response.data?.jobId;
+      if (jobId) {
+        setActiveJobId(jobId);
+        toast.success('Procesamiento iniciado');
+      } else {
+        throw new Error('No se recibió ID de tarea del servidor');
+      }
     } catch (err) {
-      toast.error('Error al iniciar el procesamiento');
+      console.error('Error al iniciar el procesamiento:', err);
+      const msg = err.response?.data?.detail || err.message || 'Error al iniciar el procesamiento';
+      toast.error(msg);
       setIsProcessing(false);
     }
+  };
+
+  const handleProcessError = (errMsg) => {
+    setIsProcessing(false);
+    toast.error(errMsg || 'Error durante la generación de clips');
   };
 
   const handleProcessComplete = (newClips) => {
     setIsProcessing(false);
     setActiveJobId(null);
-    if (newClips) {
+    if (newClips && newClips.length > 0) {
       setClips(prev => [...newClips, ...prev]);
     } else {
       fetchClips();
@@ -101,7 +128,11 @@ export default function Home() {
           {/* Right Column - Results */}
           <div className="xl:col-span-2 space-y-6 flex flex-col">
             {activeJobId && (
-              <ProgressBar jobId={activeJobId} onComplete={handleProcessComplete} />
+              <ProgressBar 
+                jobId={activeJobId} 
+                onComplete={handleProcessComplete} 
+                onError={handleProcessError} 
+              />
             )}
             
             <div className="flex-1 flex flex-col">
