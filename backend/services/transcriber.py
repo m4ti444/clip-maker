@@ -16,8 +16,15 @@ class Transcriber:
 
     def _load_model(self):
         if self.model is None:
-            # compute_type="int8" y device="cpu" garantizan máxima compatibilidad sin requerir CUDA
-            self.model = WhisperModel(settings.WHISPER_MODEL, device="cpu", compute_type="int8")
+            # Optimizado para procesadores Intel Core i7 (10 núcleos):
+            # cpu_threads=8 y num_workers=2 para paralelizar al máximo en CPU sin sobrecalentar
+            self.model = WhisperModel(
+                settings.WHISPER_MODEL, 
+                device="cpu", 
+                compute_type="int8",
+                cpu_threads=8,
+                num_workers=2
+            )
 
     def _extract_audio(self, video_path: str, audio_path: str):
         ffmpeg_bin = get_ffmpeg_cmd()
@@ -29,6 +36,7 @@ class Transcriber:
             "-acodec", "pcm_s16le",
             "-ar", "16000",
             "-ac", "1",
+            "-threads", "4",
             audio_path
         ]
         subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
@@ -38,7 +46,11 @@ class Transcriber:
         audio_path = video_path + ".wav"
         try:
             self._extract_audio(video_path, audio_path)
-            segments, info = self.model.transcribe(audio_path, word_timestamps=True)
+            segments, info = self.model.transcribe(
+                audio_path, 
+                word_timestamps=True,
+                beam_size=1  # Greedy search: mucho más rápido con precisión excelente para clips
+            )
             
             full_text = ""
             segments_data = []

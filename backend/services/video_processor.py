@@ -23,7 +23,6 @@ async def cut_clip(video_path: str, start: float, end: float, output_path: str) 
         
     out_p = InputSanitizer.sanitize_path(output_path, settings.OUTPUT_DIR)
     
-    # Si el archivo destino existe, eliminarlo antes de reescribir
     if os.path.exists(out_p):
         try:
             os.remove(out_p)
@@ -31,6 +30,7 @@ async def cut_clip(video_path: str, start: float, end: float, output_path: str) 
             pass
 
     duration = max(0.5, end - start)
+    # Optimizado: -preset ultrafast y -threads 8 aprovechan al máximo los 10 núcleos de Intel
     command = [
         ffmpeg_bin,
         "-y",
@@ -38,7 +38,8 @@ async def cut_clip(video_path: str, start: float, end: float, output_path: str) 
         "-i", in_p,
         "-t", str(duration),
         "-c:v", "libx264",
-        "-preset", "fast",
+        "-preset", "ultrafast",
+        "-threads", "8",
         "-c:a", "aac",
         "-avoid_negative_ts", "make_zero",
         out_p
@@ -102,7 +103,6 @@ async def add_subtitles(video_path: str, words: list, output_path: str, style: s
         with open(ass_path, "w", encoding="utf-8") as f:
             f.write(ass_content)
             
-        # Formato de ruta compatible con FFmpeg en Windows (barras directas y dos puntos escapados)
         norm_ass = os.path.abspath(ass_path).replace("\\", "/")
         norm_ass = norm_ass.replace(":", "\\:")
         
@@ -111,6 +111,9 @@ async def add_subtitles(video_path: str, words: list, output_path: str, style: s
             "-y",
             "-i", in_p,
             "-vf", f"subtitles='{norm_ass}'",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-threads", "8",
             "-c:a", "copy",
             tmp_out
         ]
@@ -123,8 +126,7 @@ async def add_subtitles(video_path: str, words: list, output_path: str, style: s
             os.replace(tmp_out, actual_out_p)
             return actual_out_p
     except Exception as e:
-        # Si fallan los subtítulos por fuentes o librerías, preservar el video sin crashear
-        print(f"[AVISO] No se pudieron aplicar subtítulos: {e}. Manteniendo clip original.")
+        print(f"[AVISO] Subtítulos omitidos por compatibilidad: {e}. Preservando clip.")
         if os.path.exists(tmp_out):
             try:
                 os.remove(tmp_out)
@@ -150,7 +152,6 @@ async def reframe_vertical(video_path: str, face_positions: list, output_path: s
     tmp_out = actual_out_p + ".crop_tmp.mp4"
 
     try:
-        # Filtro de recorte centrado a 9:16 con redondeo a números pares
         crop_filter = "crop=trunc(ih*9/32)*2:ih,scale=1080:1920"
         command = [
             ffmpeg_bin,
@@ -158,7 +159,8 @@ async def reframe_vertical(video_path: str, face_positions: list, output_path: s
             "-i", in_p,
             "-vf", crop_filter,
             "-c:v", "libx264",
-            "-preset", "fast",
+            "-preset", "ultrafast",
+            "-threads", "8",
             "-c:a", "copy",
             tmp_out
         ]
@@ -171,7 +173,7 @@ async def reframe_vertical(video_path: str, face_positions: list, output_path: s
             os.replace(tmp_out, actual_out_p)
             return actual_out_p
     except Exception as e:
-        print(f"[AVISO] No se pudo reencuadrar verticalmente: {e}. Manteniendo formato original.")
+        print(f"[AVISO] Reencuadre omitido: {e}. Preservando formato original.")
         if os.path.exists(tmp_out):
             try:
                 os.remove(tmp_out)
