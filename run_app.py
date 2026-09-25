@@ -4,9 +4,16 @@ import time
 import webbrowser
 import subprocess
 
+# Forzar salida en UTF-8 para evitar errores de charmap en consolas de Windows
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 def main():
     print("=" * 60)
-    print(" 🎬 INICIANDO CLIPENGINE - AI VIDEO CLIPPER")
+    print("  INICIANDO CLIPENGINE - AI VIDEO CLIPPER")
     print("=" * 60)
 
     project_root = os.path.dirname(os.path.abspath(__file__))
@@ -16,25 +23,27 @@ def main():
     try:
         subprocess.run(["ffmpeg", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         print(" [OK] FFmpeg detectado correctamente.")
-    except FileNotFoundError:
-        print(" [AVISO] FFmpeg no se encontró en el PATH del sistema.")
-        print("         Para instalarlo en Windows ejecuta en PowerShell: winget install ffmpeg")
+    except Exception:
+        print(" [AVISO] FFmpeg no se encontro en el PATH.")
 
-    # 2. Configurar variables de entorno y directorios
+    # 2. Configurar directorios
     os.environ["PYTHONPATH"] = backend_dir
     os.makedirs(os.path.join(backend_dir, "uploads"), exist_ok=True)
     os.makedirs(os.path.join(backend_dir, "output"), exist_ok=True)
 
     port = 8000
-    url = f"http://localhost:{port}"
+    url = f"http://127.0.0.1:{port}"
 
     print(f"\n [>] Iniciando servidor en {url}...")
 
-    # 3. Lanzar el navegador después de 2.5 segundos en segundo plano
+    # 3. Abrir navegador en segundo plano
     def open_browser():
-        time.sleep(2.5)
+        time.sleep(2.0)
         print(f"\n [>] Abriendo navegador en {url}...\n")
-        webbrowser.open(url)
+        try:
+            webbrowser.open(url)
+        except Exception as e:
+            print(f" [AVISO] No se pudo abrir el navegador automaticamente: {e}")
 
     import threading
     browser_thread = threading.Thread(target=open_browser, daemon=True)
@@ -45,8 +54,10 @@ def main():
         import uvicorn
         uvicorn.run("main:app", host="127.0.0.1", port=port, app_dir=backend_dir, reload=False)
     except ImportError:
-        print("\n [ERROR] 'uvicorn' no está instalado en este entorno de Python.")
-        print("         Instala las dependencias con: pip install -r backend/requirements.txt")
+        print("\n [ERROR] 'uvicorn' no esta instalado.")
+        input("\nPresiona Enter para salir...")
+    except Exception as e:
+        print(f"\n [ERROR] Error al iniciar el servidor: {e}")
         input("\nPresiona Enter para salir...")
 
 if __name__ == "__main__":
