@@ -1,0 +1,22 @@
+# Archivos generados
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+*.db
+uploads/
+output/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

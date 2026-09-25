@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: clipengine
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: WHISPER_MODEL
+        value: base
+      - key: TEMP_FILE_TTL_HOURS
+        value: "12"
+    healthCheckPath: /api/health
+    disk:
+      name: clipengine-data
+      mountPath: /app/data
+      sizeGB: 10
