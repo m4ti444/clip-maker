@@ -5,7 +5,7 @@ import ClipSettings from '../components/ClipSettings';
 import ProgressBar from '../components/ProgressBar';
 import ClipList from '../components/ClipList';
 import ClipPreview from '../components/ClipPreview';
-import { processVideo, getClips } from '../api/client';
+import { processVideo, getClips, getSettings } from '../api/client';
 import toast from 'react-hot-toast';
 
 export default function Home() {
@@ -25,7 +25,24 @@ export default function Home() {
 
   useEffect(() => {
     fetchClips();
+    fetchDefaultSettings();
   }, []);
+
+  const fetchDefaultSettings = async () => {
+    try {
+      const res = await getSettings();
+      if (res.data) {
+        setSettings(prev => ({
+          ...prev,
+          minDuration: res.data.default_clip_min_duration || res.data.defaultMinDuration || prev.minDuration,
+          maxDuration: res.data.default_clip_max_duration || res.data.defaultMaxDuration || prev.maxDuration,
+          clipCount: res.data.default_clip_count || res.data.defaultClipCount || prev.clipCount,
+        }));
+      }
+    } catch (e) {
+      // Ignored
+    }
+  };
 
   const fetchClips = async () => {
     try {
