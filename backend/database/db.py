@@ -4,7 +4,10 @@ from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKe
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base, relationship
 
-from backend.config import settings
+try:
+    from backend.config import settings
+except ImportError:
+    from config import settings
 
 Base = declarative_base()
 

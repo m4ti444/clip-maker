@@ -137,8 +137,11 @@ async def process_video_task(job_id: str, request: VideoProcessRequest, file_pat
         jobs[job_id]["progress"] = 50
         jobs[job_id]["message"] = "Selecting clips"
         
-        # We need a db session here but we're in background task, could create one
-        from backend.database.db import async_session
+        try:
+            from backend.database.db import async_session
+        except ImportError:
+            from database.db import async_session
+            
         async with async_session() as db:
             campaigns = await campaign_manager_service.get_campaigns(db, status="active")
         

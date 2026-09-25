@@ -1,5 +1,4 @@
 @echo off
-setlocal enabledelayedexpansion
 title ClipEngine - AI Video Clipper
 cd /d "%~dp0"
 
@@ -8,33 +7,40 @@ echo           INICIANDO CLIPENGINE LOCALMENTE
 echo ======================================================
 echo.
 
-REM 1. Recargar PATH para que detecte FFmpeg recien instalado
+REM 1. Agregar rutas de WinGet y herramientas al PATH de esta sesion
 set "PATH=%LOCALAPPDATA%\Microsoft\WinGet\Links;%PATH%"
 
-REM 2. Comprobar si existe FFmpeg
-where ffmpeg >nul 2>&1
-if errorlevel 1 (
-    echo [INFO] Buscando FFmpeg...
-    winget install --id Gyan.FFmpeg -e --accept-source-agreements --accept-package-agreements >nul 2>&1
-)
-
-REM 3. Comprobar Python
+REM 2. Comprobar si Python esta disponible
 where python >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] No se encontro Python en el sistema.
-    echo Por favor instala Python desde https://www.python.org/
-    pause
-    exit /b 1
+    REM Intentar buscar en rutas comunes de Windows
+    if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" set "PATH=%LOCALAPPDATA%\Programs\Python\Python312;%LOCALAPPDATA%\Programs\Python\Python312\Scripts;%PATH%"
+    if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" set "PATH=%LOCALAPPDATA%\Programs\Python\Python311;%LOCALAPPDATA%\Programs\Python\Python311\Scripts;%PATH%"
+    if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" set "PATH=%LOCALAPPDATA%\Programs\Python\Python310;%LOCALAPPDATA%\Programs\Python\Python310\Scripts;%PATH%"
+    if exist "%LOCALAPPDATA%\Python\pythoncore-3.14-64\python.exe" set "PATH=%LOCALAPPDATA%\Python\pythoncore-3.14-64;%LOCALAPPDATA%\Python\pythoncore-3.14-64\Scripts;%PATH%"
+    
+    where python >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] No se pudo encontrar Python en el sistema.
+        echo Por favor instala Python desde https://www.python.org/ y asegurate de marcar 'Add Python to PATH'.
+        echo.
+        pause
+        exit /b 1
+    )
 )
 
-echo [OK] Entorno listo. Iniciando ClipEngine...
+echo [OK] Python detectado.
+echo [INFO] Iniciando motor ClipEngine...
 echo.
 
-REM 4. Ejecutar el lanzador que abre el navegador
+REM 3. Ejecutar el orquestador principal
 python run_app.py
 
 if errorlevel 1 (
     echo.
-    echo [AVISO] El programa se detuvo con algun error.
+    echo ======================================================
+    echo  [AVISO] El programa se cerro con un codigo de error.
+    echo ======================================================
+    echo.
     pause
 )

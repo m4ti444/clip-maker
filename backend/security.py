@@ -40,14 +40,9 @@ class RateLimiter:
 class InputSanitizer:
     """Sanitizes all user inputs to prevent injection attacks."""
     
-    ALLOWED_DOMAINS = [
-        'youtube.com', 'www.youtube.com', 'youtu.be',
-        'm.youtube.com', 'music.youtube.com',
-        'twitch.tv', 'www.twitch.tv', 'clips.twitch.tv',
-        'kick.com', 'www.kick.com',
-        'vimeo.com', 'www.vimeo.com',
-        'dailymotion.com', 'www.dailymotion.com',
-        'tiktok.com', 'www.tiktok.com',
+    ALLOWED_BASE_DOMAINS = [
+        'youtube.com', 'youtu.be', 'twitch.tv', 'kick.com',
+        'vimeo.com', 'dailymotion.com', 'tiktok.com', 'x.com', 'twitter.com'
     ]
     
     SHELL_DANGEROUS = [';', '&&', '||', '|', '`', '$(', '>{', '<(', '\n', '\r', '\x00']
@@ -56,20 +51,25 @@ class InputSanitizer:
     def sanitize_url(url: str) -> str:
         if not url:
             raise ValueError("URL cannot be empty")
+        url = url.strip()
         parsed = urlparse(url)
         if parsed.scheme not in ['http', 'https']:
-            raise ValueError("Invalid URL scheme")
+            raise ValueError("Invalid URL scheme (must be http or https)")
         if not parsed.netloc:
             raise ValueError("Invalid URL format")
         if '@' in parsed.netloc:
             raise ValueError("URL cannot contain credentials")
         
-        # Check for IP addresses simply
-        if re.match(r'^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$', parsed.hostname or ''):
+        hostname = (parsed.hostname or '').lower()
+        if re.match(r'^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$', hostname):
             raise ValueError("IP addresses are not allowed")
             
-        if parsed.hostname not in InputSanitizer.ALLOWED_DOMAINS:
-            raise ValueError("Domain not whitelisted")
+        is_allowed = any(
+            hostname == d or hostname.endswith('.' + d)
+            for d in InputSanitizer.ALLOWED_BASE_DOMAINS
+        )
+        if not is_allowed:
+            raise ValueError(f"Domain '{hostname}' not supported. Supported: YouTube, Twitch, Kick, TikTok, Vimeo")
             
         if '<script' in url.lower() or 'javascript:' in url.lower():
             raise ValueError("Invalid URL content")
@@ -86,7 +86,7 @@ class InputSanitizer:
         if len(filename) > 200:
             filename = filename[-200:]
             
-        allowed_exts = {'.mp4', '.webm', '.mkv', '.avi', '.mov', '.ass', '.json', '.txt'}
+        allowed_exts = {'.mp4', '.webm', '.mkv', '.avi', '.mov', '.ass', '.json', '.txt', '.wav'}
         ext = os.path.splitext(filename)[1].lower()
         if ext and ext not in allowed_exts:
             raise ValueError(f"File extension {ext} not allowed")
@@ -105,8 +105,10 @@ class InputSanitizer:
     def sanitize_path(path: str, allowed_base: str) -> str:
         resolved_path = os.path.realpath(path)
         resolved_base = os.path.realpath(allowed_base)
-        if not resolved_path.startswith(resolved_base):
-            raise ValueError("Path traversal attempt detected")
+        norm_path = os.path.normcase(resolved_path)
+        norm_base = os.path.normcase(resolved_base)
+        if not (norm_path == norm_base or norm_path.startswith(norm_base + os.sep) or norm_path.startswith(norm_base + "/")):
+            raise ValueError(f"Path traversal attempt detected: {path} outside {allowed_base}")
         return resolved_path
     
     @staticmethod

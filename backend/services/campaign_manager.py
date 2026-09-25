@@ -1,9 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import update, delete
-from backend.models.schemas import CampaignCreate, CampaignUpdate
-from backend.database.db import Campaign, Clip
-import json
+try:
+    from backend.models.schemas import CampaignCreate, CampaignUpdate
+    from backend.database.db import Campaign, Clip
+except ImportError:
+    from models.schemas import CampaignCreate, CampaignUpdate
+    from database.db import Campaign, Clip
 
 class CampaignManager:
     async def create_campaign(self, db: AsyncSession, data: CampaignCreate) -> Campaign:
