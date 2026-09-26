@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_MB: int = 500
     SESSION_SECRET: str = "clipengine-secret-change-me"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env", 
+        env_file_encoding="utf-8", 
+        extra="ignore",
+        validate_assignment=False,
+    )
 
 settings = Settings()
+

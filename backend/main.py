@@ -306,16 +306,42 @@ async def get_status(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
     return ProcessingStatus(job_id=job_id, **jobs[job_id])
 
+def _serialize_clip(c):
+    """Helper to serialize a Clip ORM object into a dict with video URL."""
+    video_url = ""
+    if c.output_path:
+        fname = os.path.basename(c.output_path)
+        video_url = f"/output/{fname}"
+    return {
+        "id": c.id,
+        "title": c.title or f"Clip #{c.id}",
+        "start_time": c.start_time,
+        "end_time": c.end_time,
+        "duration": round(c.duration, 1) if c.duration else 0,
+        "transcript": c.transcript or "",
+        "transcriptPreview": (c.transcript[:120] + "...") if c.transcript and len(c.transcript) > 120 else (c.transcript or ""),
+        "virality_score": c.virality_score,
+        "viralityScore": round(c.virality_score, 1) if c.virality_score else 0,
+        "output_path": c.output_path,
+        "url": video_url,
+        "campaign_id": c.campaign_id,
+        "campaignMatch": None,
+        "status": c.status,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+    }
+
 @app.get("/api/clips")
 async def list_clips(campaign_id: int = None, status: str = None, db: AsyncSession = Depends(get_db)):
-    query = select(Clip)
+    query = select(Clip).order_by(Clip.created_at.desc())
     if campaign_id:
         query = query.where(Clip.campaign_id == campaign_id)
     if status:
         query = query.where(Clip.status == status)
     result = await db.execute(query)
     clips = result.scalars().all()
-    return clips
+    
+    serialized = [_serialize_clip(c) for c in clips]
+    return serialized
 
 @app.get("/api/clips/{clip_id}")
 async def get_clip(clip_id: int, db: AsyncSession = Depends(get_db)):

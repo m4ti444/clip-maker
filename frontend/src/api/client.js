@@ -11,6 +11,7 @@ api.interceptors.request.use(async (config) => {
   if (creds) {
     const { provider, apiKey, model, ollamaUrl } = creds;
     if (provider) config.headers['X-LLM-Provider'] = provider;
+    // Send raw API key - getCredentials() already decrypts from localStorage
     if (apiKey) config.headers['X-LLM-API-Key'] = apiKey;
     if (model) config.headers['X-LLM-Model'] = model;
     if (ollamaUrl) config.headers['X-Ollama-URL'] = ollamaUrl;

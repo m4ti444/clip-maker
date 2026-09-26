@@ -111,15 +111,11 @@ export default function Home() {
     toast.error(errMsg || 'Error durante la generación de clips');
   };
 
-  const handleProcessComplete = (newClips) => {
+  const handleProcessComplete = () => {
     localStorage.removeItem('clipengine_active_job_id');
     setIsProcessing(false);
     setActiveJobId(null);
-    if (newClips && newClips.length > 0) {
-      setClips(prev => [...newClips, ...prev]);
-    } else {
-      fetchClips();
-    }
+    fetchClips();
     toast.success('¡Video procesado con éxito!');
   };
 
