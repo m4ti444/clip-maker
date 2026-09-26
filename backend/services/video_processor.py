@@ -142,6 +142,19 @@ async def add_subtitles(video_path: str, words: list, output_path: str, style: s
     return actual_out_p
 
 async def reframe_vertical(video_path: str, face_positions: list, output_path: str) -> str:
+    """
+    Reframe a horizontal video to 9:16 vertical format with dynamic face tracking.
+    The crop window follows detected faces smoothly using piecewise-linear interpolation
+    evaluated per-frame by FFmpeg's expression engine.
+    Falls back to static center crop if dynamic tracking fails.
+    """
+    import cv2
+    
+    try:
+        from backend.services.face_tracker import face_tracker_service as ft
+    except ImportError:
+        from services.face_tracker import face_tracker_service as ft
+
     ffmpeg_bin = get_ffmpeg_cmd()
     try:
         in_p = InputSanitizer.sanitize_path(video_path, settings.UPLOAD_DIR)
@@ -152,28 +165,82 @@ async def reframe_vertical(video_path: str, face_positions: list, output_path: s
     tmp_out = actual_out_p + ".crop_tmp.mp4"
 
     try:
-        crop_filter = "crop=trunc(ih*9/32)*2:ih,scale=1080:1920"
+        # 1. Read video dimensions
+        cap = cv2.VideoCapture(in_p)
+        vw = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        vh = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+
+        if vw <= 0 or vh <= 0:
+            raise ValueError(f"No se pudo leer dimensiones del video: {vw}x{vh}")
+
+        # 2. If already vertical (~9:16 or narrower), just pad/scale
+        if vw / vh <= 0.65:
+            crop_filter = (
+                "scale=1080:1920:force_original_aspect_ratio=decrease,"
+                "pad=1080:1920:-1:-1:color=black"
+            )
+            print(f"[REFRAME] Video ya es vertical ({vw}x{vh}), solo escalando.")
+        elif face_positions and len(face_positions) > 0:
+            # 3. Dynamic face-following crop
+            smoothed = ft.smooth_and_downsample(face_positions, interval=1.0, smoothing=0.65)
+            x_expr, crop_w = ft.build_crop_x_expression(smoothed, vw, vh)
+            # Single-quote the expression so FFmpeg doesn't interpret commas as filter separators
+            crop_filter = f"crop={crop_w}:{vh}:'{x_expr}':0,scale=1080:1920"
+            print(f"[REFRAME] Crop dinámico: {len(smoothed)} keyframes, {vw}x{vh} → {crop_w}x{vh} → 1080x1920")
+        else:
+            # 4. Static center crop (no faces detected)
+            crop_w = (int(vh * 9 / 16) // 2) * 2
+            center_x = max(0, (vw - crop_w) // 2)
+            crop_filter = f"crop={crop_w}:{vh}:{center_x}:0,scale=1080:1920"
+            print(f"[REFRAME] Crop estático centrado: {vw}x{vh} → {crop_w}x{vh}")
+
         command = [
-            ffmpeg_bin,
-            "-y",
-            "-i", in_p,
+            ffmpeg_bin, "-y", "-i", in_p,
             "-vf", crop_filter,
-            "-c:v", "libx264",
-            "-preset", "ultrafast",
-            "-threads", "8",
+            "-c:v", "libx264", "-preset", "ultrafast", "-threads", "8",
             "-c:a", "copy",
             tmp_out
         ]
+        
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, lambda: subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600))
+        await loop.run_in_executor(
+            None,
+            lambda: subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=600)
+        )
         
         if os.path.exists(tmp_out):
             if os.path.exists(actual_out_p):
                 os.remove(actual_out_p)
             os.replace(tmp_out, actual_out_p)
             return actual_out_p
+
     except Exception as e:
-        print(f"[AVISO] Reencuadre omitido: {e}. Preservando formato original.")
+        print(f"[AVISO] Reencuadre dinámico falló: {e}. Intentando crop estático...")
+        # Fallback: simple center crop sin face tracking
+        try:
+            fallback_filter = "crop=trunc(ih*9/32)*2:ih,scale=1080:1920"
+            command = [
+                ffmpeg_bin, "-y", "-i", in_p,
+                "-vf", fallback_filter,
+                "-c:v", "libx264", "-preset", "ultrafast", "-threads", "8",
+                "-c:a", "copy",
+                tmp_out
+            ]
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600)
+            )
+            if os.path.exists(tmp_out):
+                if os.path.exists(actual_out_p):
+                    os.remove(actual_out_p)
+                os.replace(tmp_out, actual_out_p)
+                return actual_out_p
+        except Exception as e2:
+            print(f"[AVISO] Crop estático también falló: {e2}. Preservando formato original.")
+
+        # Cleanup temp file on failure
         if os.path.exists(tmp_out):
             try:
                 os.remove(tmp_out)
@@ -181,3 +248,4 @@ async def reframe_vertical(video_path: str, face_positions: list, output_path: s
                 pass
                 
     return actual_out_p
+
