@@ -43,6 +43,8 @@ async def validate_credentials(credentials: dict, ip: str = "unknown") -> bool:
     provider = credentials.get("provider")
     api_key = credentials.get("api_key", "")
     model = credentials.get("model") or "gemini-3.8-flash"
+    if provider == "gemini" and model in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro"]:
+        model = "gemini-3.8-flash"
     ollama_url = credentials.get("ollama_url") or "http://localhost:11434"
     
     if api_key:

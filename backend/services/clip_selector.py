@@ -51,6 +51,11 @@ Transcript with timestamps:
         model = credentials.get("model") if credentials and credentials.get("model") else settings.LLM_MODEL
         ollama_url = credentials.get("ollama_url") if credentials and credentials.get("ollama_url") else settings.OLLAMA_URL
 
+        # Auto-migrar modelos de Gemini descontinuados a la versión activa (3.8-flash)
+        if provider == "gemini" and model in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro"]:
+            print(f"[LLM] Modelo descontinuado detectado ({model}). Migrando automáticamente a 'gemini-3.8-flash'...")
+            model = "gemini-3.8-flash"
+
         results = []
         try:
             if provider == "gemini":
