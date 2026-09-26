@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     WHISPER_MODEL: str = "base"
     LLM_PROVIDER: str = "gemini"  # gemini, openai, ollama
     LLM_API_KEY: str = ""
-    LLM_MODEL: str = "gemini-2.0-flash"
+    LLM_MODEL: str = "gemini-3.8-flash"
     OLLAMA_URL: str = "http://localhost:11434"
     DEFAULT_CLIP_MIN_DURATION: int = 30
     DEFAULT_CLIP_MAX_DURATION: int = 60

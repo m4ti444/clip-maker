@@ -120,7 +120,7 @@ export async function storeCredentials(credentials) {
  */
 export async function getCredentials() {
   const provider = localStorage.getItem('clipengine_provider') || 'gemini';
-  const model = localStorage.getItem('clipengine_model') || (provider === 'gemini' ? 'gemini-2.0-flash' : provider === 'openai' ? 'gpt-4o-mini' : 'llama3.1');
+  const model = localStorage.getItem('clipengine_model') || (provider === 'gemini' ? 'gemini-3.8-flash' : provider === 'openai' ? 'gpt-4o-mini' : 'llama3.1');
   const ollamaUrl = localStorage.getItem('clipengine_ollama_url') || 'http://localhost:11434';
   const storedKey = localStorage.getItem('clipengine_api_key');
   

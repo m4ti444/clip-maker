@@ -9,7 +9,7 @@ export default function Settings() {
   const [settings, setSettings] = useState({
     llmProvider: 'gemini',
     apiKey: '',
-    modelName: 'gemini-2.0-flash',
+    modelName: 'gemini-3.8-flash',
     ollamaUrl: 'http://localhost:11434',
     whisperModel: 'base',
     defaultMinDuration: 30,
@@ -68,7 +68,7 @@ export default function Settings() {
     
     // Si cambia el proveedor, sugerir automáticamente el modelo recomendado
     if (name === 'llmProvider') {
-      let defaultModel = 'gemini-2.0-flash';
+      let defaultModel = 'gemini-3.8-flash';
       if (value === 'openai') defaultModel = 'gpt-4o-mini';
       if (value === 'ollama') defaultModel = 'llama3.1';
       
@@ -195,7 +195,7 @@ export default function Settings() {
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Nombre del Modelo
                     <span className="text-xs text-gray-400 ml-2 font-normal">
-                      {settings.llmProvider === 'gemini' && '(ej: gemini-2.0-flash o gemini-1.5-flash)'}
+                      {settings.llmProvider === 'gemini' && '(ej: gemini-3.8-flash o gemini-1.5-flash)'}
                       {settings.llmProvider === 'openai' && '(ej: gpt-4o-mini o gpt-4o)'}
                       {settings.llmProvider === 'ollama' && '(ej: llama3.1 o mistral)'}
                     </span>
@@ -206,7 +206,7 @@ export default function Settings() {
                     value={settings.modelName}
                     onChange={handleChange}
                     className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-colors font-mono text-sm"
-                    placeholder="gemini-2.0-flash"
+                    placeholder="gemini-3.8-flash"
                   />
                 </div>
               </div>

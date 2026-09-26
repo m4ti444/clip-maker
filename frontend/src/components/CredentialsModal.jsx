@@ -6,7 +6,7 @@ import { storeCredentials, clearCredentials } from '../utils/crypto';
 export default function CredentialsModal({ onSuccess }) {
   const [provider, setProvider] = useState('gemini');
   const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('gemini-2.0-flash');
+  const [model, setModel] = useState('gemini-3.8-flash');
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
   
   const [showKey, setShowKey] = useState(false);
@@ -16,7 +16,7 @@ export default function CredentialsModal({ onSuccess }) {
   const handleProviderChange = (e) => {
     const newProvider = e.target.value;
     setProvider(newProvider);
-    if (newProvider === 'gemini') setModel('gemini-2.0-flash');
+    if (newProvider === 'gemini') setModel('gemini-3.8-flash');
     else if (newProvider === 'openai') setModel('gpt-4o-mini');
     else if (newProvider === 'ollama') setModel('llama3.1');
     setError(null);
