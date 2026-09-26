@@ -1,5 +1,6 @@
 import json
 import re
+import asyncio
 import httpx
 
 try:
@@ -129,19 +130,46 @@ Transcript with timestamps:
     async def _call_gemini(self, prompt: str, api_key: str, model: str) -> list:
         if not api_key:
             return []
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        
+        # Lista de modelos a probar: el configurado primero, y gemini-flash-latest como respaldo
+        models_to_try = [model]
+        if "gemini-flash-latest" not in models_to_try:
+            models_to_try.append("gemini-flash-latest")
+            
         payload = {
             "contents": [{"parts": [{"text": prompt}]}]
         }
+        
         async with httpx.AsyncClient() as client:
-            resp = await client.post(url, json=payload, timeout=60.0)
-            resp.raise_for_status()
-            data = resp.json()
-            try:
-                text_response = data['candidates'][0]['content']['parts'][0]['text']
-                return self._parse_response(text_response)
-            except Exception:
-                return []
+            for m in models_to_try:
+                for attempt in range(3):
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+                    try:
+                        resp = await client.post(url, json=payload, timeout=60.0)
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            text_response = data['candidates'][0]['content']['parts'][0]['text']
+                            parsed = self._parse_response(text_response)
+                            if parsed:
+                                return parsed
+                        elif resp.status_code in (503, 429):
+                            wait_sec = 2.0 * (attempt + 1)
+                            print(f"[LLM] Google Gemini ({m}) ocupado ({resp.status_code}). Reintentando en {wait_sec}s (intento {attempt + 1}/3)...")
+                            await asyncio.sleep(wait_sec)
+                            continue
+                        elif resp.status_code == 404:
+                            print(f"[LLM] Modelo {m} devolvió 404. Pasando a modelo alternativo...")
+                            break
+                        else:
+                            resp.raise_for_status()
+                    except (httpx.ConnectError, httpx.TimeoutException) as e:
+                        print(f"[LLM] Reintento por conexión ({m}): {e}")
+                        await asyncio.sleep(2.0)
+                        continue
+                    except Exception as e:
+                        print(f"[LLM] Error consultando Gemini ({m}): {e}")
+                        break
+        return []
 
     async def _call_openai(self, prompt: str, api_key: str, model: str) -> list:
         if not api_key:
