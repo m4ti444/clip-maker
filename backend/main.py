@@ -118,6 +118,21 @@ async def cleanup_task():
 
 @app.on_event("startup")
 async def startup_event():
+    # Silenciar excepciones inofensivas de conexión cerrada en Windows al reproducir/buscar videos en el navegador
+    try:
+        loop = asyncio.get_running_loop()
+        def _ignore_connection_reset(loop, context):
+            exc = context.get("exception")
+            if isinstance(exc, (ConnectionResetError, BrokenPipeError)) or (isinstance(exc, OSError) and getattr(exc, "winerror", None) == 10054):
+                return
+            msg = str(context.get("message", ""))
+            if "_call_connection_lost" in msg or "10054" in msg:
+                return
+            loop.default_exception_handler(context)
+        loop.set_exception_handler(_ignore_connection_reset)
+    except Exception:
+        pass
+
     await init_db()
     asyncio.create_task(cleanup_task())
 
