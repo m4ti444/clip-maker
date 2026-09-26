@@ -30,10 +30,31 @@ if errorlevel 1 (
 )
 
 echo [OK] Python detectado.
+echo.
+
+REM 3. Comprobar si las dependencias estan instaladas
+python -c "import fastapi, uvicorn, pydantic_settings, faster_whisper, cv2" >nul 2>&1
+if errorlevel 1 (
+    echo ======================================================
+    echo  [PRIMERA EJECUCION] Instalando librerias necesarias...
+    echo  (Esto se hace una sola vez y toma 1 a 2 minutos)
+    echo ======================================================
+    echo.
+    python -m pip install -r requirements.txt
+    if errorlevel 1 (
+        echo [ERROR] Hubo un problema instalando las librerias.
+        pause
+        exit /b 1
+    )
+    echo.
+    echo [OK] Librerias instaladas exitosamente.
+    echo.
+)
+
 echo [INFO] Iniciando motor ClipEngine...
 echo.
 
-REM 3. Ejecutar el orquestador principal
+REM 4. Ejecutar el orquestador principal
 python run_app.py
 
 if errorlevel 1 (
