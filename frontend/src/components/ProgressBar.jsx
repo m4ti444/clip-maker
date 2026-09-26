@@ -46,6 +46,15 @@ export default function ProgressBar({ jobId, onComplete, onError }) {
           }
         }
       } catch (err) {
+        // Si el job ya no existe (404 por reinicio de servidor), limpiar estado inmediatamente
+        if (err.response?.status === 404) {
+          if (interval) clearInterval(interval);
+          localStorage.removeItem('clipengine_active_job_id');
+          if (onError) {
+            onError('La tarea anterior finalizó o el servidor fue reiniciado.');
+          }
+          return;
+        }
         console.error('Error al consultar estado:', err);
       }
     };
